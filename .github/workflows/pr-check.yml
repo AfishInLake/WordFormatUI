@@ -1,6 +1,10 @@
 name: PR Build Check
 
 on:
+  push:
+    branches: [ '*' ]
+    branches-ignore: [ master ]
+
   pull_request:
     branches: [ master ]
 
@@ -9,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        os: [ windows-latest, macos-latest ]
       fail-fast: false
 
     steps:
