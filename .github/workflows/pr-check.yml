@@ -1,0 +1,36 @@
+name: PR Build Check
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6.2.0
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+
+      - name: Install project dependencies
+        run: make install
+
+      - name: Run 'make setup' to fetch backend binary
+        run: make setup
+
+      - name: Build Tauri app (verify only)
+        run: make build
