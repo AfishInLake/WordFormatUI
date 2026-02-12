@@ -44,17 +44,16 @@ jobs:
       # === 找到构建产物并上传到 Release ===
       - name: Locate bundle file
         id: find-bundle
+        shell: bash
         run: |
           cd src-tauri
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            BUNDLE=$(find target/release/bundle -type f \( -name "*.msi" -o -name "*.exe" \) | head -n1)
-          elif [ "$RUNNER_OS" == "Linux" ]; then
-            BUNDLE=$(find target/release/bundle -type f \( -name "*.AppImage" -o -name "*.deb" \) | head -n1)
-          else
-            BUNDLE=$(find target/release/bundle -type f -name "*.dmg" | head -n1)
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+          BUNDLE=$(find target/release/bundle -type f \( -name "*.msi" -o -name "*.exe" \) | head -n1)
+          else  # macOS
+          BUNDLE=$(find target/release/bundle -type f -name "*.dmg" | head -n1)
           fi
           echo "bundle_path=$BUNDLE" >> $GITHUB_OUTPUT
-          echo "Found bundle: $BUNDLE"
+          echo "Found: $BUNDLE"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2.5.0
