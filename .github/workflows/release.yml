@@ -1,0 +1,62 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags: [ "v*" ]
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6.2.0
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Fetch backend binary
+        run: make setup
+
+      - name: Build Tauri app
+        run: make build
+        env:
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+
+      # === 找到构建产物并上传到 Release ===
+      - name: Locate bundle file
+        id: find-bundle
+        run: |
+          cd src-tauri
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            BUNDLE=$(find target/release/bundle -type f \( -name "*.msi" -o -name "*.exe" \) | head -n1)
+          elif [ "$RUNNER_OS" == "Linux" ]; then
+            BUNDLE=$(find target/release/bundle -type f \( -name "*.AppImage" -o -name "*.deb" \) | head -n1)
+          else
+            BUNDLE=$(find target/release/bundle -type f -name "*.dmg" | head -n1)
+          fi
+          echo "bundle_path=$BUNDLE" >> $GITHUB_OUTPUT
+          echo "Found bundle: $BUNDLE"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          files: src-tauri/${{ steps.find-bundle.outputs.bundle_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

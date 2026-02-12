@@ -32,10 +32,10 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/wordformat"
+      "binaries/wordformat/wordformat"
     ],
     "resources": {
-      "binaries/_internal": "_internal"
+      "binaries/wordformat/_internal": "_internal"
     },
     "windows": {
       "wix": {
