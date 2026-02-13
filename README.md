@@ -1,13 +1,11 @@
-当然可以！以下是优化后的 **中文 README**，语言更精炼、结构更清晰、重点更突出，并修复了部分格式和逻辑细节：
-
----
-
 # WordFormatUI
 
 ![License](https://img.shields.io/github/license/AfishInLake/WordFormatUI?color=blue)
 ![tauri](https://img.shields.io/badge/tauri-2.0-blue)
 ![Status](https://img.shields.io/badge/status-开发中-orange)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
+
+---
 
 一个基于 **Vue + Tauri + JavaScript + Rust** 构建的跨平台桌面应用，为 [WordFormat](https://github.com/AfishInLake/WordFormat) 提供图形化操作界面，帮助用户轻松完成学术论文格式自动化检查与修正。
 
