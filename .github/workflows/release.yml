@@ -41,6 +41,7 @@ jobs:
       # ===== 缓存 WordFormat backend binary =====
       - name: Determine WordFormat version
         id: get-version
+        shell: bash
         run: |
           if [ -f .backend-version ]; then
             VERSION=$(cat .backend-version)
