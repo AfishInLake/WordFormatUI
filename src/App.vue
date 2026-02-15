@@ -1,8 +1,8 @@
 <template>
-  <DocumentTagCheck/>
+  <DocTagChecker />
 </template>
 <script setup>
-import DocumentTagCheck from "./components/DocumentTagCheck.vue";
+import DocTagChecker  from "./components/DocTagChecker.vue";
 </script>
 <style>
 * {
