@@ -18,6 +18,7 @@
           <FileUploadPanel
               v-model:docx-file="docxFile"
               v-model:yaml-file="yamlFile"
+              :generated-config="generatedConfig"
               :is-loading="isLoading"
               @generate-json="callGenerateJsonApi"
           />
@@ -98,6 +99,26 @@ import {
 
 import request from "../utils/request.js";
 
+// ====== Props ======
+const props = defineProps({
+  generatedConfig: {
+    type: Object,
+    default: null
+  }
+});
+
+// 创建响应式引用，确保能够使用最新的props值
+const currentConfig = ref(props.generatedConfig);
+
+// 监听props变化，更新响应式引用
+watch(
+  () => props.generatedConfig,
+  (newConfig) => {
+    currentConfig.value = newConfig;
+  },
+  { deep: true }
+);
+
 // ====== 响应式状态 ======
 const docxFile = ref(null)
 const yamlFile = ref(null)
@@ -148,11 +169,24 @@ const handleCategoryChange = (newCategory) => {
 
 // 生成节点 JSON（上传文件）
 const callGenerateJsonApi = async () => {
-  if (!docxFile.value || !yamlFile.value) return
+  if (!docxFile.value) return
 
   const formData = new FormData()
   formData.append('docx_file', docxFile.value)
-  formData.append('config_file', yamlFile.value)
+  
+  // 优先使用生成的配置，否则使用选择的yaml文件
+  if (currentConfig.value) {
+    // 将生成的配置转换为YAML字符串
+    const yaml = await import('js-yaml');
+    const yamlContent = yaml.dump(currentConfig.value, { indent: 2, skipInvalid: true });
+    const blob = new Blob([yamlContent], { type: 'application/yaml' });
+    const configFile = new File([blob], 'generated-config.yaml', { type: 'application/yaml' });
+    formData.append('config_file', configFile);
+  } else if (yamlFile.value) {
+    formData.append('config_file', yamlFile.value)
+  } else {
+    return
+  }
 
   isLoading.value = true
   loadingText.value = '正在解析文档并生成节点...'
@@ -191,12 +225,28 @@ const callCheckFormatApi = async () => {
 
   isLoading.value = true
   loadingText.value = '正在执行格式校验...'
-  if (!docxFile.value || !yamlFile.value) return
+  if (!docxFile.value) return
 
   const formData = new FormData()
   formData.append('docx_file', docxFile.value)
-  formData.append('config_file', yamlFile.value)
+  
+  // 优先使用生成的配置，否则使用选择的yaml文件
+  if (currentConfig.value) {
+    // 将生成的配置转换为YAML字符串
+    const yaml = await import('js-yaml');
+    const yamlContent = yaml.dump(currentConfig.value, { indent: 2, skipInvalid: true });
+    const blob = new Blob([yamlContent], { type: 'application/yaml' });
+    const configFile = new File([blob], 'generated-config.yaml', { type: 'application/yaml' });
+    formData.append('config_file', configFile);
+  } else if (yamlFile.value) {
+    formData.append('config_file', yamlFile.value)
+  } else {
+    isLoading.value = false
+    return
+  }
+  
   formData.append('json_data', JSON.stringify(nodeData.value))
+  
   try {
     const res = await request.post(
         '/check-format',
@@ -225,12 +275,28 @@ const callApplyFormatApi = async () => {
 
   isLoading.value = true
   loadingText.value = '正在生成格式化后的文档...'
-  if (!docxFile.value || !yamlFile.value) return
+  if (!docxFile.value) return
 
   const formData = new FormData()
   formData.append('docx_file', docxFile.value)
-  formData.append('config_file', yamlFile.value)
+  
+  // 优先使用生成的配置，否则使用选择的yaml文件
+  if (currentConfig.value) {
+    // 将生成的配置转换为YAML字符串
+    const yaml = await import('js-yaml');
+    const yamlContent = yaml.dump(currentConfig.value, { indent: 2, skipInvalid: true });
+    const blob = new Blob([yamlContent], { type: 'application/yaml' });
+    const configFile = new File([blob], 'generated-config.yaml', { type: 'application/yaml' });
+    formData.append('config_file', configFile);
+  } else if (yamlFile.value) {
+    formData.append('config_file', yamlFile.value)
+  } else {
+    isLoading.value = false
+    return
+  }
+  
   formData.append('json_data', JSON.stringify(nodeData.value))
+  
   try {
     const res = await request.post(
         '/apply-format',
