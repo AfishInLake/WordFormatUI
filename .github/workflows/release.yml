@@ -18,6 +18,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
+      # ===== 缓存 Rust 依赖 =====
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.8.2
+        with:
+          key: ${{ runner.os }}-release-rust-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -27,14 +33,41 @@ jobs:
         uses: actions/setup-node@v6.2.0
         with:
           node-version: 22.13.1
-          cache: npm
-
+          cache: npm  # ✅ 这个已经启用 npm 缓存
 
       - name: Install dependencies
         run: make install
 
+      # ===== 缓存 WordFormat backend binary =====
+      - name: Determine WordFormat version
+        id: get-version
+        run: |
+          if [ -f .backend-version ]; then
+            VERSION=$(cat .backend-version)
+          else
+            echo "Fetching latest release tag..."
+            VERSION=$(curl -s \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "User-Agent: WordFormatUI-Release" \
+              https://api.github.com/repos/AfishInLake/WordFormat/releases/latest \
+              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+              echo "ERROR: Failed to fetch latest tag"
+              exit 1
+            fi
+          fi
+          echo "WORDFORMAT_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Cache WordFormat backend binary
+        uses: actions/cache@v5.0.3
+        id: cache-backend
+        with:
+          path: src-tauri/binaries/wordformat
+          key: ${{ runner.os }}-release-wordformat-${{ env.WORDFORMAT_VERSION }}
+
       - name: Fetch backend binary
-        run: make setup
+        if: steps.cache-backend.outputs.cache-hit != 'true'
+        run: node scripts/setup.js --version ${{ env.WORDFORMAT_VERSION }}
 
       - name: Build Tauri app
         run: make build
@@ -48,9 +81,9 @@ jobs:
         run: |
           cd src-tauri
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-          BUNDLE=$(find target/release/bundle -type f \( -name "*.msi" -o -name "*.exe" \) | head -n1)
+            BUNDLE=$(find target/release/bundle -type f \( -name "*.msi" -o -name "*.exe" \) | head -n1)
           else  # macOS
-          BUNDLE=$(find target/release/bundle -type f -name "*.dmg" | head -n1)
+            BUNDLE=$(find target/release/bundle -type f -name "*.dmg" | head -n1)
           fi
           echo "bundle_path=$BUNDLE" >> $GITHUB_OUTPUT
           echo "Found: $BUNDLE"

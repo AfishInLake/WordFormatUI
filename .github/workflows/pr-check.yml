@@ -7,13 +7,14 @@ on:
       - 'README.md'
       - 'docs/**'
       - '**/*.md'
-
+      - '**/*.yml'
   pull_request:
-    branches: [ master ]
+    branches: [ 'master' ]
     paths-ignore:
       - 'README.md'
       - 'docs/**'
       - '**/*.md'
+      - '**/*.yml'
 
 jobs:
   build-check:
@@ -27,6 +28,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.8.2
+        with:
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -38,12 +44,38 @@ jobs:
           node-version: 22.13.1
           cache: npm
 
-
       - name: Install project dependencies
         run: make install
 
-      - name: Run 'make setup' to fetch backend binary
-        run: make setup
+      - name: Determine WordFormat version
+        id: get-version
+        run: |
+          if [ -f .backend-version ]; then
+            VERSION=$(cat .backend-version)
+            echo "Using fixed version from .backend-version: $VERSION"
+          else
+            echo "Fetching latest release tag..."
+            VERSION=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/AfishInLake/WordFormat/releases/latest \
+              | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+              echo "ERROR: Failed to fetch or parse latest tag"
+              exit 1
+            fi
+            echo "Latest version: $VERSION"
+          fi
+          echo "WORDFORMAT_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Cache WordFormat backend binary
+        uses: actions/cache@v5.0.3
+        id: cache-backend
+        with:
+          path: src-tauri/binaries/wordformat
+          key: ${{ runner.os }}-wordformat-${{ env.WORDFORMAT_VERSION }}
+
+      - name: Fetch WordFormat backend binary
+        if: steps.cache-backend.outputs.cache-hit != 'true'
+        run: node scripts/setup.js --version ${{ env.WORDFORMAT_VERSION }}
 
       - name: Build Tauri app (verify only)
         run: make build
