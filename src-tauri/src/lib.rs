@@ -1,4 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use flexi_logger::{Cleanup, Criterion, FileSpec, Logger, Naming};
+use log::{error, info};
 use std::sync::{Arc, Mutex};
 use tauri::WindowEvent;
 use tauri::{AppHandle, Manager, State};
@@ -15,7 +17,7 @@ fn start(app_handle: AppHandle) -> Result<Option<CommandChild>, String> {
         .parent()
         .ok_or_else(|| "无法获取程序目录".to_string())?;
 
-    println!("🔧 设置工作目录为: {:?}", exe_dir);
+    info!("🔧 设置工作目录为: {:?}", exe_dir);
 
     // 启动 sidecar，并设置工作目录
     let sidecar_command = app_handle
@@ -33,14 +35,14 @@ fn start(app_handle: AppHandle) -> Result<Option<CommandChild>, String> {
 
 fn stop(sidecar_child: State<Arc<Mutex<Option<CommandChild>>>>, app_handle: AppHandle) -> bool {
     if let Some(child) = sidecar_child.lock().unwrap().take() {
-        println!("准备关闭 wordformat.exe 进程");
+        info!("准备关闭 wordformat.exe 进程");
         let _ = child.kill(); // 忽略结果，继续强制清理
     }
 
     // 👇 Windows 下兜底：强制结束所有 wordformat.exe
     #[cfg(windows)]
     {
-        println!("执行 taskkill 强制清理...");
+        info!("执行 taskkill 强制清理...");
         let _ = app_handle
             .shell()
             .command("taskkill")
@@ -48,20 +50,30 @@ fn stop(sidecar_child: State<Arc<Mutex<Option<CommandChild>>>>, app_handle: AppH
             .spawn();
     }
 
-    println!("关闭成功");
+    info!("关闭成功");
     true
 }
 fn close_all_windows(app_handle: AppHandle) {
     let windows = app_handle.webview_windows();
     for (_, window) in windows {
-        println!("关闭窗口");
+        info!("关闭窗口");
         if let Err(e) = window.close() {
-            println!("{:#?}", e)
+            error!("关闭窗口失败：{:#?}", e) // ← 用 error! 更合适
         }
     }
 }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    Logger::try_with_str("info")
+        .expect("日志配置错误")
+        .log_to_file(FileSpec::default().directory("logs").basename("app"))
+        .rotate(
+            Criterion::Size(5_000_000), // 5MB 分割
+            Naming::Timestamps,
+            Cleanup::KeepLogFiles(3), // 保留3个旧文件
+        )
+        .start()
+        .expect("日志初始化失败");
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -74,19 +86,18 @@ pub fn run() {
             match start(app_handle) {
                 Ok(child_opt) => {
                     // 存储子进程句柄
-                    println!("✅ Sidecar started successfully");
+                    info!("✅ Sidecar started successfully");
                     *sidecar_child.lock().unwrap() = child_opt;
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to start sidecar: {}", e);
-                    print!("{}", e)
+                    error!("❌ Failed to start sidecar: {}", e);
                 }
             }
             Ok(())
         })
         .on_window_event(move |window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                println!("触发close事件");
+                info!("触发close事件");
                 // 获取 Sidecar 进程句柄
                 let sidecar_child = window.state::<Arc<Mutex<Option<CommandChild>>>>();
                 let _ = stop(sidecar_child, window.app_handle().clone());
