@@ -53,6 +53,13 @@
 make install
 
 # 2. 下载后端二进制（自动匹配平台）
+#终端可能需要设置代理，如：
+#windows
+#$env:HTTPS_PROXY="http://127.0.0.1:7890"
+#$env:HTTP_PROXY="http://127.0.0.1:7890"
+#macOS/linux
+#export http_proxy=http://127.0.0.1:7890
+#export https_proxy=http://127.0.0.1:7890
 make setup
 
 # 3. 启动开发服务器（热重载）
@@ -75,7 +82,7 @@ src-tauri/target/release/bundle/
 ```
 
 - **Windows** → `.msi`
-- **macOS** → `.dmg`
+- **macOS** → `.app`
 
 ---
 

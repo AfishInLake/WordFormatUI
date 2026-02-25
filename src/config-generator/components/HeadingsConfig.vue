@@ -2,28 +2,16 @@
   <div class="headings-config">
     <h3>一级标题</h3>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>正则表达式:</label>
-        <input type="text" v-model="config.level_1.section_title_re">
-      </div>
     </div>
     <FormatConfig :config="config.level_1" />
 
     <h3 class="mt-4">二级标题</h3>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>正则表达式:</label>
-        <input type="text" v-model="config.level_2.section_title_re">
-      </div>
     </div>
     <FormatConfig :config="config.level_2" />
 
     <h3 class="mt-4">三级标题</h3>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>正则表达式:</label>
-        <input type="text" v-model="config.level_3.section_title_re">
-      </div>
     </div>
     <FormatConfig :config="config.level_3" />
   </div>

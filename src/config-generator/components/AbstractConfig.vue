@@ -3,10 +3,6 @@
     <h3>中文摘要</h3>
     <h4>中文标题</h4>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>中文标题正则表达式:</label>
-        <input type="text" v-model="config.chinese.chinese_title.section_title_re">
-      </div>
     </div>
     <FormatConfig :config="config.chinese.chinese_title" />
 
@@ -16,10 +12,6 @@
     <h3 class="mt-4">英文摘要</h3>
     <h4>英文标题</h4>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>英文标题正则表达式:</label>
-        <input type="text" v-model="config.english.english_title.section_title_re">
-      </div>
     </div>
     <FormatConfig :config="config.english.english_title" />
 
@@ -29,10 +21,6 @@
     <h3 class="mt-4">关键词配置</h3>
     <h4>中文关键词</h4>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>中文关键词正则表达式:</label>
-        <input type="text" v-model="config.keywords.chinese.section_title_re">
-      </div>
       <div class="form-item">
         <label>中文关键词最小数量:</label>
         <input type="number" v-model.number="config.keywords.chinese.count_min">
@@ -52,10 +40,6 @@
 
     <h4 class="mt-4">英文关键词</h4>
     <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="form-item">
-        <label>英文关键词正则表达式:</label>
-        <input type="text" v-model="config.keywords.english.section_title_re">
-      </div>
       <div class="form-item">
         <label>英文关键词最小数量:</label>
         <input type="number" v-model.number="config.keywords.english.count_min">
