@@ -3,10 +3,6 @@
     <h3>参考文献标题</h3>
     <div class="grid grid-cols-2 gap-4 mb-4">
       <div class="form-item">
-        <label>正则表达式:</label>
-        <input type="text" v-model="config.title.section_title_re">
-      </div>
-      <div class="form-item">
         <label>章节标题:</label>
         <input type="text" v-model="config.title.section_title">
       </div>

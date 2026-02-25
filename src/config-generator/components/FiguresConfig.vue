@@ -2,10 +2,6 @@
   <div class="figures-config">
     <div class="grid grid-cols-2 gap-4 mb-4">
       <div class="form-item">
-        <label>图注正则表达式:</label>
-        <input type="text" v-model="config.section_title_re">
-      </div>
-      <div class="form-item">
         <label>图注位置:</label>
         <select v-model="config.caption_position">
           <option v-for="option in captionPositionOptions" :key="option" :value="option">{{ option }}</option>

@@ -50,27 +50,21 @@ export const defaultConfig = {
   },
   abstract: {
     chinese: {
-      chinese_title: createConfigWithGlobalInheritance({
-        section_title_re: "^[\\s\\t]*摘要[\\s\\t]*$"
-      }),
+      chinese_title: createConfigWithGlobalInheritance(),
       chinese_content: createConfigWithGlobalInheritance()
     },
     english: {
-      english_title: createConfigWithGlobalInheritance({
-        section_title_re: "^[\\s\\t]*Abstract[\\s\\t]*$"
-      }),
+      english_title: createConfigWithGlobalInheritance(),
       english_content: createConfigWithGlobalInheritance()
     },
     keywords: {
       english: createConfigWithGlobalInheritance({
-        section_title_re: "^[\\s\\t]*(Keywords|关键词)[\\s\\t]*$",
         keywords_bold: true,
         count_min: 4,
         count_max: 4,
         trailing_punct_forbidden: true
       }),
       chinese: createConfigWithGlobalInheritance({
-        section_title_re: "^[\\s\\t]*(Keywords|关键词)[\\s\\t]*$",
         keywords_bold: true,
         count_min: 4,
         count_max: 4,
@@ -79,30 +73,21 @@ export const defaultConfig = {
     }
   },
   headings: {
-    level_1: createConfigWithGlobalInheritance({
-      section_title_re: "^[\\s\\t]*第[一二三四五六七八九十]+章[\\s\\t]*.+$"
-    }),
-    level_2: createConfigWithGlobalInheritance({
-      section_title_re: "^[\\s\\t]*[1-9][0-9]*\\.[1-9][0-9]*[\\s\\t]*.+$"
-    }),
-    level_3: createConfigWithGlobalInheritance({
-      section_title_re: "^[\\s\\t]*[1-9][0-9]*\\.[1-9][0-9]*\\.[1-9][0-9]*[\\s\\t]*.+$"
-    })
+    level_1: createConfigWithGlobalInheritance(),
+    level_2: createConfigWithGlobalInheritance(),
+    level_3: createConfigWithGlobalInheritance()
   },
   body_text: createConfigWithGlobalInheritance(),
   figures: createConfigWithGlobalInheritance({
-    section_title_re: "^[\\s\\t]*(图|Figures)[\\s\\t]*$",
     caption_position: "below",
     caption_prefix: "图"
   }),
   tables: createConfigWithGlobalInheritance({
-    section_title_re: "^[\\s\\t]*(表|Tables)[\\s\\t]*$",
     caption_position: "above",
     caption_prefix: "表"
   }),
   references: {
     title: createConfigWithGlobalInheritance({
-      section_title_re: "^[\\s\\t]*(参考文献|References)[\\s\\t]*$",
       section_title: "参考文献"
     }),
     content: createConfigWithGlobalInheritance({
@@ -112,9 +97,7 @@ export const defaultConfig = {
     })
   },
   acknowledgements: {
-    title: createConfigWithGlobalInheritance({
-      section_title_re: "^[\\s\\t]*(致谢|Acknowledgements)[\\s\\t]*$"
-    }),
+    title: createConfigWithGlobalInheritance(),
     content: createConfigWithGlobalInheritance()
   }
 }
@@ -141,22 +124,19 @@ export const captionPositionOptions = ["above", "below"]
 export const applyGlobalFormatToAll = (userConfig) => {
   // 摘要配置
   userConfig.abstract.chinese.chinese_title = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.abstract.chinese.chinese_title.section_title_re
+    ...userConfig.global_format
   }
   userConfig.abstract.chinese.chinese_content = {
     ...userConfig.global_format
   }
   userConfig.abstract.english.english_title = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.abstract.english.english_title.section_title_re
+    ...userConfig.global_format
   }
   userConfig.abstract.english.english_content = {
     ...userConfig.global_format
   }
   userConfig.abstract.keywords.english = {
     ...userConfig.global_format,
-    section_title_re: userConfig.abstract.keywords.english.section_title_re,
     keywords_bold: userConfig.abstract.keywords.english.keywords_bold,
     count_min: userConfig.abstract.keywords.english.count_min,
     count_max: userConfig.abstract.keywords.english.count_max,
@@ -164,7 +144,6 @@ export const applyGlobalFormatToAll = (userConfig) => {
   }
   userConfig.abstract.keywords.chinese = {
     ...userConfig.global_format,
-    section_title_re: userConfig.abstract.keywords.chinese.section_title_re,
     keywords_bold: userConfig.abstract.keywords.chinese.keywords_bold,
     count_min: userConfig.abstract.keywords.chinese.count_min,
     count_max: userConfig.abstract.keywords.chinese.count_max,
@@ -173,16 +152,13 @@ export const applyGlobalFormatToAll = (userConfig) => {
 
   // 标题配置
   userConfig.headings.level_1 = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.headings.level_1.section_title_re
+    ...userConfig.global_format
   }
   userConfig.headings.level_2 = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.headings.level_2.section_title_re
+    ...userConfig.global_format
   }
   userConfig.headings.level_3 = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.headings.level_3.section_title_re
+    ...userConfig.global_format
   }
 
   // 正文配置
@@ -193,7 +169,6 @@ export const applyGlobalFormatToAll = (userConfig) => {
   // 插图配置
   userConfig.figures = {
     ...userConfig.global_format,
-    section_title_re: userConfig.figures.section_title_re,
     caption_position: userConfig.figures.caption_position,
     caption_prefix: userConfig.figures.caption_prefix
   }
@@ -201,7 +176,6 @@ export const applyGlobalFormatToAll = (userConfig) => {
   // 表格配置
   userConfig.tables = {
     ...userConfig.global_format,
-    section_title_re: userConfig.tables.section_title_re,
     caption_position: userConfig.tables.caption_position,
     caption_prefix: userConfig.tables.caption_prefix
   }
@@ -209,7 +183,6 @@ export const applyGlobalFormatToAll = (userConfig) => {
   // 参考文献配置
   userConfig.references.title = {
     ...userConfig.global_format,
-    section_title_re: userConfig.references.title.section_title_re,
     section_title: userConfig.references.title.section_title
   }
   userConfig.references.content = {
@@ -221,8 +194,7 @@ export const applyGlobalFormatToAll = (userConfig) => {
 
   // 致谢配置
   userConfig.acknowledgements.title = {
-    ...userConfig.global_format,
-    section_title_re: userConfig.acknowledgements.title.section_title_re
+    ...userConfig.global_format
   }
   userConfig.acknowledgements.content = {
     ...userConfig.global_format
