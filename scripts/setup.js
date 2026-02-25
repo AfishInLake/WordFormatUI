@@ -173,7 +173,7 @@ function downloadFile(url, dest) {
                     return;
                 }
             } else {
-                console.log('未检测到代理，尝试直连...');
+                console.log('未检测到代理，尝试直连...\r\nPS:如果下载失败，请点击上述链接手动下载，把文件解压在src-tauri/binaries目录下，并修改可执行文件名称\n具体参考官方文档:https://tauri.app/zh-cn/develop/sidecar/\n');
             }
 
             const req = protocol.get(currentUrl, options, (response) => {
