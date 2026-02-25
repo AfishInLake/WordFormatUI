@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import {execSync} from 'child_process';
 import https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 // === 解析命令行参数（可选）===
 function parseArgs() {
@@ -138,45 +139,91 @@ async function main() {
     }
 
     fs.unlinkSync(zipPath);
-    console.log(`✅ Executable ready: wordformat-${targetTriple}`);
+    console.log(`Executable ready: wordformat-${targetTriple}`);
     console.log('Backend ready for Tauri v2!');
 }
 
 // === 工具函数（保持不变）===
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
+        console.log(`准备下载: ${url}`);
+
         const maxRedirects = 5;
         let redirects = 0;
 
-        function get(url) {
-            const protocol = url.startsWith('https') ? https : require('http');
-            const req = protocol.get(url, (response) => {
+        function get(currentUrl) {
+            const protocol = currentUrl.startsWith('https') ? https : http;
+
+            // 👇 2. 构建请求选项
+            const options = {
+                timeout: 120000, // 2 分钟超时
+                headers: { 'User-Agent': 'WordFormat-Setup' }
+            };
+
+            // 👇 3. 关键：检测环境变量并注入 Agent
+            const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy;
+
+            if (proxyUrl) {
+                console.log(`检测到代理配置，强制使用 Agent: ${proxyUrl}`);
+                try {
+                    options.agent = new HttpsProxyAgent(proxyUrl);
+                } catch (e) {
+                    console.error('代理配置解析失败:', e.message);
+                    reject(e);
+                    return;
+                }
+            } else {
+                console.log('未检测到代理，尝试直连...');
+            }
+
+            const req = protocol.get(currentUrl, options, (response) => {
+                // ... (重定向逻辑不变) ...
                 if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
                     if (redirects >= maxRedirects) {
                         reject(new Error('Too many redirects'));
                         return;
                     }
                     redirects++;
+                    console.log(`重定向到: ${response.headers.location}`);
                     get(response.headers.location);
-                } else if (response.statusCode === 200) {
+                }
+                // ... (成功逻辑不变) ...
+                else if (response.statusCode === 200) {
                     const file = fs.createWriteStream(dest);
                     response.pipe(file);
                     file.on('finish', () => {
                         file.close();
+                        console.log('下载完成');
                         resolve();
                     });
                     file.on('error', (err) => {
-                        fs.unlink(dest, () => {
-                        });
+                        fs.unlink(dest, () => {});
                         reject(err);
                     });
-                } else {
+
+                    // 打印进度
+                    const total = parseInt(response.headers['content-length'], 10) || 0;
+                    let current = 0;
+                    response.on('data', chunk => {
+                        current += chunk.length;
+                        if (total > 0) {
+                            process.stdout.write(`\r下载进度: ${((current/total)*100).toFixed(1)}%`);
+                        }
+                    });
+                }
+                // ... (错误逻辑不变) ...
+                else {
                     reject(new Error(`HTTP ${response.statusCode}`));
                 }
             });
 
-            req.on('error', (err) => reject(err));
-            req.setTimeout(30000, () => {
+            req.on('error', (err) => {
+                console.error('\n请求失败:', err.message);
+                reject(err);
+            });
+
+            req.on('timeout', () => {
+                console.error('\n请求超时');
                 req.destroy();
                 reject(new Error('Request timeout'));
             });
