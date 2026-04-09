@@ -110,8 +110,6 @@ const importConfig = (config) => {
   userConfig.value = JSON.parse(JSON.stringify(config))
 }
 
-import { defineEmits } from 'vue';
-
 // 定义事件
 const emit = defineEmits(['config-updated']);
 

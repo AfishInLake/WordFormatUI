@@ -88,9 +88,7 @@ import FileUploadPanel from './FileUploadPanel.vue'
 import FormatActionPanel from './FormatActionPanel.vue'
 import NodeListPanel from './NodeListPanel.vue'
 import NodeDetailPanel from './NodeDetailPanel.vue'
-import {save} from '@tauri-apps/plugin-dialog'; // 对话框插件
-import {writeFile} from '@tauri-apps/plugin-fs'; // 文件系统插件（写入二进制文件）
-
+import { confirm as tauriConfirm } from '@tauri-apps/plugin-dialog';
 import {
   CATEGORY_CONFIG,
   SCORE_THRESHOLD,
@@ -258,7 +256,7 @@ const callCheckFormatApi = async () => {
           }
         }
     )
-    await downloadFile(res)
+    downloadFile(res)
   } catch (error) {
     console.error('格式校验失败:', error)
     alert('❌ 格式校验失败：' + (error.response?.data?.detail || error.message))
@@ -271,7 +269,11 @@ const callCheckFormatApi = async () => {
 const callApplyFormatApi = async () => {
   if (!isFileLoaded.value) return
 
-  if (!confirm('⚠️ 此操作将根据当前标签生成新文档，是否继续？')) return
+  const ok = await tauriConfirm('⚠️ 此操作将根据当前标签生成新文档，是否继续？', {
+    title: '确认操作',
+    type: 'warning',
+  });
+  if (!ok) return;
 
   isLoading.value = true
   loadingText.value = '正在生成格式化后的文档...'
@@ -309,7 +311,7 @@ const callApplyFormatApi = async () => {
         })
 
     // 触发下载
-    await downloadFile(res)
+    downloadFile(res)
   } catch (error) {
     console.error('格式化失败:', error)
     alert('❌ 文档格式化失败：' + (error.response?.data?.detail || error.message))
@@ -320,43 +322,40 @@ const callApplyFormatApi = async () => {
 
 // 下载文件
 async function downloadFile(response) {
-  // 2. 解构后端返回的下载链接和文件名
-  const {download_url, final_filename, original_docx} = response.data;
-
-  // 3. Tauri 2.x 核心：弹出“另存为”对话框，让用户选择保存路径
-  const filePath = await save({
-    title: `保存${original_docx === '格式校验' ? '标注版' : '修改版'}文档`,
-    defaultPath: final_filename, // 默认文件名（比如“论文--标注版.docx”）
-    filters: [
-      {
-        name: 'Word 文档',
-        extensions: ['docx'] // 只允许选择/保存 docx 文件
-      }
-    ]
-  });
-
-  // 如果用户取消选择路径，返回并提示
-  if (!filePath) {
-    alert(`✅ 执行成功！
-📌 你已取消保存，可手动访问以下链接下载：
-${download_url}`);
+  try {
     isLoading.value = false;
-    return;
+
+    // 安全判断
+    if (!response?.data?.download_url) {
+      alert("✅ 操作完成！");
+      return;
+    }
+
+    const { download_url, final_filename } = response.data;
+
+    // 使用你封装好的 request 工具下载文件
+    // 直接请求 download_url，自动带上 baseURL、header、token
+    const blobData = await request.get(download_url, {}, {
+      responseType: 'blob'
+    });
+
+    // 浏览器下载（纯前端，不依赖任何 Tauri 插件）
+    const blob = new Blob([blobData]);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = final_filename || "document.docx";
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    alert("✅ 文件下载成功！");
+  } catch (err) {
+    console.error("下载失败", err);
+    alert("✅ 处理完成！文件下载失败：" + err.message);
   }
-
-  // 4. 通过 HTTP 插件获取文件二进制流
-  loadingText.value = '正在下载文件并保存到指定位置...';
-  const fileResponse = await request.get(download_url, {}, {responseType: 'arraybuffer'});
-
-  // 5. 将二进制流写入用户指定的路径
-  await writeFile(filePath, fileResponse);
-
-  // 6. 保存成功提示
-  alert(`✅ 保存成功！
-📁 保存路径：${filePath}
-💡 可直接打开该文件查看结果`);
 }
-
 // 核对所有标签（前端模拟：高亮低分+other）
 const checkAllTags = () => {
   if (!isFileLoaded.value) return

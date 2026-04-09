@@ -1,8 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use flexi_logger::{Cleanup, Criterion, FileSpec, Logger, Naming};
+use flexi_logger::{Age, Cleanup, Criterion, DeferredNow, FileSpec, Logger, Naming, Record};
 use log::{error, info, warn};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, RunEvent, WindowEvent,  State};
+use tauri::{AppHandle, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -21,6 +21,7 @@ fn start_sidecar_process(app_handle: &AppHandle) -> Result<CommandChild, String>
         .shell()
         .sidecar("wordformat")
         .map_err(|e| format!("无法获取sidecar: {}", e))?
+        .args(["startapi"])
         .current_dir(exe_dir);
     let (_, child) = sidecar_command
         .spawn()
@@ -28,22 +29,34 @@ fn start_sidecar_process(app_handle: &AppHandle) -> Result<CommandChild, String>
     Ok(child)
 }
 
-/// 强制清理残留进程 (Windows 兜底)
+/// 强制清理残留进程 (跨平台兜底)
 fn force_kill_process(app_handle: &AppHandle) {
     #[cfg(windows)]
     {
         info!("执行 taskkill 强制清理 wordformat.exe...");
-        // 忽略错误，因为如果进程不存在，taskkill 会报错，这很正常
         let _ = app_handle
             .shell()
             .command("taskkill")
             .args(["/IM", "wordformat.exe", "/F"])
             .spawn();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // 其他平台不需要执行
-        info!("非 Windows 平台，跳过 taskkill 兜底清理。");
+        info!("执行 killall 强制清理 wordformat 进程...");
+        let _ = app_handle
+            .shell()
+            .command("killall")
+            .args(["-9", "wordformat"])
+            .spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        info!("执行 pkill 强制清理 wordformat 进程...");
+        let _ = app_handle
+            .shell()
+            .command("pkill")
+            .args(["-f", "wordformat"])
+            .spawn();
     }
 }
 
@@ -120,18 +133,42 @@ async fn check_exe_status(state: State<'_, SidecarState>) -> Result<bool, String
     Ok(guard.is_some())
 }
 
+fn log_format(
+    w: &mut dyn std::io::Write,
+    now: &mut DeferredNow,
+    record: &Record,
+) -> Result<(), std::io::Error> {
+    write!(
+        w,
+        "[{}] {} [{}:{}] {}",
+        now.format("%Y-%m-%d %H:%M:%S%.3f"),
+        record.level(),
+        record.file().unwrap_or("<unknown>"),
+        record.line().unwrap_or(0),
+        &record.args()
+    )
+}
+
 pub fn run() {
+    std::env::set_var("WEBKIT_DISABLE_DIALOG_MODAL", "1");
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    std::env::set_var("WEBKIT_ALWAYS_SPAWN_COMPOSITOR_THREAD", "1"); // 新增这一行！
+
     Logger::try_with_str("info")
         .expect("日志配置错误")
+        .format(log_format)
         .log_to_file(FileSpec::default().directory("logs").basename("app"))
+        .append()  // 追加模式，不覆盖已有日志
         .rotate(
-            Criterion::Size(5_000_000), // 5MB 分割
+            Criterion::Age(Age::Day), // 按天轮转日志文件
             Naming::Timestamps,
             Cleanup::KeepLogFiles(3), // 保留3个旧文件
         )
+        .print_message() // 同时输出到控制台
         .start()
         .expect("日志初始化失败");
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -188,15 +225,13 @@ pub fn run() {
                     label: _,
                     event: window_event,
                     ..
-                } => {
-                    match window_event{
-                        WindowEvent::CloseRequested { api, .. } => {
-                            api.prevent_close();
-                            app_handle.exit(0);
-                        }
-                        _ => {}
+                } => match window_event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        app_handle.exit(0);
                     }
-                }
+                    _ => {}
+                },
                 _ => {}
             }
         });
