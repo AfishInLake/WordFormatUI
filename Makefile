@@ -1,33 +1,31 @@
-UNAME_S := $(shell uname -s 2>/dev/null || echo "Windows_NT")
-UNAME_M := $(shell uname -m 2>/dev/null || echo "x86_64")
-
-.PHONY: help dev build install setup clean clean-binaries
+.PHONY: help dev backend electron build install clean
 
 help:
 	@echo "WordFormatUI Commands"
-	@echo "   make dev      # Start development server"
-	@echo "   make build    # Build production version"
-	@echo "   make install  # Install dependencies"
-	@echo "   make setup    # Fetch latest WordFormat backend binary"
-	@echo "   make clean    # Clean node_modules and Rust build cache"
+	@echo "   make dev              # Start Vite dev server (browser only)"
+	@echo "   make electron         # Start Electron dev mode"
+	@echo "   make backend          # 构建后端 Python 运行时 (读取 .backend-version)"
+	@echo "   make backend VER=github:v1.1.3  # 指定版本构建"
+	@echo "   make build            # 构建并打包分发版"
+	@echo "   make install          # Install dependencies"
+	@echo "   make clean            # Clean build artifacts"
 
 dev:
-	npm run tauri dev
+	npm run dev
+
+electron:
+	npm run electron:dev
+
+backend:
+	node scripts/build-backend.cjs $(if $(VER),--ver $(VER),)
 
 build:
-	npm run tauri build
+	npm run electron:build
 
 install:
 	npm install
 
-setup: clean-binaries
-	node scripts/setup.js
-
-clean-binaries:
-	node scripts/cleanbinary.js
-	@echo "Cleaned binaries directory."
-
 clean:
 	@echo "Cleaning..."
-	node scripts/clean.js
+	rm -rf dist release node_modules/.vite
 	@echo "Clean complete."

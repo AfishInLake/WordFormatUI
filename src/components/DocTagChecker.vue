@@ -88,7 +88,7 @@ import FileUploadPanel from './FileUploadPanel.vue'
 import FormatActionPanel from './FormatActionPanel.vue'
 import NodeListPanel from './NodeListPanel.vue'
 import NodeDetailPanel from './NodeDetailPanel.vue'
-import { confirm as tauriConfirm } from '@tauri-apps/plugin-dialog';
+import { confirm as tauriConfirm } from '@electron/dialog';
 import {
   CATEGORY_CONFIG,
   SCORE_THRESHOLD,

@@ -68,8 +68,8 @@
 import {ref, onMounted} from 'vue';
 import DocTagChecker from "./components/DocTagChecker.vue";
 import ConfigGenerator from "./config-generator/ConfigGenerator.vue";
-import {save, open} from '@tauri-apps/plugin-dialog';
-import {writeTextFile, readTextFile} from '@tauri-apps/plugin-fs';
+import { save, open } from '@electron/dialog';
+import { writeTextFile, readTextFile } from '@electron/fs';
 import yaml from 'js-yaml';
 import {defaultConfig} from "./config-generator/utils";
 
@@ -118,12 +118,12 @@ const initApp = async () => {
         isLoading.value = false;
       }, 800);
     } else {
-      throw new Error('后端返回启动失败，请检查 Rust 日志');
+      throw new Error('后端返回启动失败，请检查 日志');
     }
   } catch (err) {
     console.error(err);
     isError.value = true;
-    errorMessage.value = err.message || '无法启动 wordformat.exe，请检查是否被杀毒软件拦截。';
+    errorMessage.value = err.message || '无法启动后端服务，请检查日志';
     isLoading.value = false; // 停止 loading，显示错误界面
   }
 };
