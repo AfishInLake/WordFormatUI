@@ -89,6 +89,7 @@ import FormatActionPanel from './FormatActionPanel.vue'
 import NodeListPanel from './NodeListPanel.vue'
 import NodeDetailPanel from './NodeDetailPanel.vue'
 import { confirm as tauriConfirm } from '@electron/dialog';
+import { downloadFile } from '@electron/download';
 import {
   CATEGORY_CONFIG,
   SCORE_THRESHOLD,
@@ -256,7 +257,7 @@ const callCheckFormatApi = async () => {
           }
         }
     )
-    downloadFile(res)
+    downloadFileFromResponse(res)
   } catch (error) {
     console.error('格式校验失败:', error)
     alert('❌ 格式校验失败：' + (error.response?.data?.detail || error.message))
@@ -311,7 +312,7 @@ const callApplyFormatApi = async () => {
         })
 
     // 触发下载
-    downloadFile(res)
+    downloadFileFromResponse(res)
   } catch (error) {
     console.error('格式化失败:', error)
     alert('❌ 文档格式化失败：' + (error.response?.data?.detail || error.message))
@@ -321,35 +322,17 @@ const callApplyFormatApi = async () => {
 }
 
 // 下载文件
-async function downloadFile(response) {
+async function downloadFileFromResponse(response) {
   try {
     isLoading.value = false;
 
-    // 安全判断
     if (!response?.data?.download_url) {
       alert("✅ 操作完成！");
       return;
     }
 
     const { download_url, final_filename } = response.data;
-
-    // 使用你封装好的 request 工具下载文件
-    // 直接请求 download_url，自动带上 baseURL、header、token
-    const blobData = await request.get(download_url, {}, {
-      responseType: 'blob'
-    });
-
-    // 浏览器下载（纯前端，不依赖任何 Tauri 插件）
-    const blob = new Blob([blobData]);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = final_filename || "document.docx";
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-
+    await downloadFile(download_url, final_filename || "document.docx");
     alert("✅ 文件下载成功！");
   } catch (err) {
     console.error("下载失败", err);

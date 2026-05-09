@@ -36,7 +36,6 @@
     "files": [
       "dist/**/*",
       "electron/*.cjs",
-      "electron/*.py",
       "package.json"
     ],
     "extraResources": [
@@ -47,7 +46,7 @@
       }
     ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": ["zip"],
       "icon": "public/icon.png"
     },
     "win": {

@@ -3,21 +3,35 @@ const path = require("path");
 const { spawn } = require("child_process");
 const fs = require("fs");
 
-// ========== 配置 ==========
+// ========== 内存优化 ==========
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256");
 
+// ========== 配置 ==========
 const BACKEND_PORT = 8000;
 const BACKEND_HOST = "127.0.0.1";
 const isWindows = process.platform === "win32";
+
+// ========== 日志文件（生产模式看不到终端，写文件备用） ==========
+const logFile = path.join(app.getPath("userData"), "backend.log");
+function log(...args) {
+  const msg = args.join(" ");
+  console.log(msg);
+  try { fs.appendFileSync(logFile, `${new Date().toISOString()} ${msg}\n`); } catch {}
+}
 
 // ========== 全局变量 ==========
 let backendProcess = null;
 let mainWindow = null;
 
 /**
+ * 获取下载目录路径
+ */
+function getDownloadsDir() {
+  return app.getPath("downloads");
+}
+
+/**
  * 获取后端 Python 解释器路径
- *
- * 开发模式和生产模式都使用 electron/python-runtime/ 下的 venv，
- * 用户无需安装任何 Python 环境。
  */
 function getPythonExe() {
   // 开发模式：electron/python-runtime/
@@ -30,21 +44,20 @@ function getPythonExe() {
   }
 
   // 生产模式：resources/python-runtime/
-  if (process.resourcesPath) {
-    const prodPython = isWindows
-      ? path.join(process.resourcesPath, "python-runtime", "Scripts", "python.exe")
-      : path.join(process.resourcesPath, "python-runtime", "bin", "python3");
+  const extraDir = process.resourcesPath || path.join(path.dirname(app.getPath("exe")), "..", "Resources");
+  const prodPython = isWindows
+    ? path.join(extraDir, "python-runtime", "Scripts", "python.exe")
+    : path.join(extraDir, "python-runtime", "bin", "python3");
 
-    if (fs.existsSync(prodPython)) {
-      return prodPython;
-    }
+  if (fs.existsSync(prodPython)) {
+    return prodPython;
   }
 
   return null;
 }
 
 /**
- * 启动后端
+ * 启动后端（-c 内联代码，不依赖 .py 文件，解决 ASAR 文件读取问题）
  */
 function startBackend() {
   return new Promise((resolve, reject) => {
@@ -56,69 +69,97 @@ function startBackend() {
 
     if (!pythonExe) {
       reject(new Error(
-        `Python 运行时未找到！\n\n请先运行:\n  npm run build:backend\n\n这会自动创建 electron/python-runtime/`
+        `Python 运行时未找到！\n\n请先运行:\n  npm run build:backend`
       ));
       return;
     }
 
-    const entryScript = path.join(__dirname, "backend_entry.py");
+    // 内联 Python 代码（避免 ASAR 内文件无法被 Python 读取）
+    const pythonCode = `
+import os, sys, socket
+os.environ["MULTIPROCESSING_RESOURCE_TRACKER"] = "0"
+if len(sys.argv) >= 2 and sys.argv[-2] == "-c" and sys.argv[-1].startswith("from multiprocessing"):
+    sys.exit(0)
 
-    if (!fs.existsSync(entryScript)) {
-      reject(new Error(`入口脚本未找到: ${entryScript}`));
-      return;
-    }
+from wordformat.api import app
+from wordformat.log_config import setup_logger, setup_uvicorn_loguru
+setup_logger()
+setup_uvicorn_loguru()
 
-    console.log(`[Main] 启动后端: ${pythonExe} ${entryScript} ${BACKEND_PORT}`);
+import uvicorn
+host = "${BACKEND_HOST}"
+port = ${BACKEND_PORT}
 
-    backendProcess = spawn(pythonExe, [entryScript, String(BACKEND_PORT)], {
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind((host, port))
+    sock.close()
+except OSError:
+    print(f"[Backend] Port {port} occupied", flush=True)
+    os._exit(1)
+
+print(f"[Backend] http://{host}:{port}", flush=True)
+uvicorn.run(app, host=host, port=port, log_config=None, access_log=False)
+`;
+
+    log(`[Main] 启动后端: ${pythonExe} -c <python>`);
+
+    backendProcess = spawn(pythonExe, ["-c", pythonCode], {
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         PYTHONUNBUFFERED: "1",
+        PYTHONOPTIMIZE: "2",
+        PYTHONDONTWRITEBYTECODE: "1",
+        OMP_NUM_THREADS: "1",
+        MKL_NUM_THREADS: "1",
+        OPENBLAS_NUM_THREADS: "1",
+        NUMEXPR_NUM_THREADS: "1",
+        TOKENIZERS_PARALLELISM: "false",
       },
     });
 
     let started = false;
 
     backendProcess.stdout.on("data", (data) => {
-      const msg = data.toString();
-      console.log(`[Backend] ${msg.trim()}`);
+      const msg = data.toString().trim();
+      if (msg) log(`[Backend stdout] ${msg}`);
       checkStarted(msg);
     });
 
     backendProcess.stderr.on("data", (data) => {
-      const msg = data.toString();
-      console.log(`[Backend stderr] ${msg.trim()}`);
+      const msg = data.toString().trim();
+      if (msg) log(`[Backend stderr] ${msg}`);
       checkStarted(msg);
     });
 
     function checkStarted(msg) {
       if (!started && (
-        msg.includes("Uvicorn running") || 
+        msg.includes("Uvicorn running") ||
         msg.includes("Application startup complete") ||
         msg.includes("启动服务") ||
-        msg.includes("启动API服务")
+        msg.includes("启动API服务") ||
+        msg.includes("http://")
       )) {
         started = true;
-        console.log("[Main] 后端服务已启动");
+        log("[Main] 后端服务已启动");
         resolve(true);
       }
     }
 
     backendProcess.on("error", (err) => {
-      console.error("[Main] 后端进程启动失败:", err.message);
+      log(`[Main] 后端进程失败: ${err.message}`);
       reject(new Error(`无法启动后端服务: ${err.message}`));
     });
 
     backendProcess.on("close", (code) => {
-      console.log(`[Main] 后端进程退出，退出码: ${code}`);
+      log(`[Main] 后端退出, code=${code}`);
       backendProcess = null;
       if (!started) {
         reject(new Error(`后端服务异常退出 (code=${code})`));
       }
     });
 
-    // 超时 30 秒
     setTimeout(() => {
       if (!started) {
         killBackend();
@@ -133,7 +174,7 @@ function startBackend() {
  */
 function killBackend() {
   if (backendProcess) {
-    console.log("[Main] 停止后端服务...");
+    log("[Main] 停止后端服务...");
     try {
       backendProcess.kill("SIGTERM");
       setTimeout(() => {
@@ -143,7 +184,7 @@ function killBackend() {
       }, 3000);
       backendProcess.once("close", () => {});
     } catch (e) {
-      console.error("[Main] 停止进程出错:", e.message);
+      log(`[Main] 停止进程出错: ${e.message}`);
     }
     backendProcess = null;
   }
@@ -162,15 +203,18 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: true,
     },
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  // 始终打开开发者工具
+  mainWindow.webContents.openDevTools();
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -182,10 +226,11 @@ function createWindow() {
 function registerIpcHandlers() {
   ipcMain.handle("start-exe", async () => {
     try {
-      return await startBackend();
+      const ok = await startBackend();
+      return { success: ok };
     } catch (err) {
-      console.error("[IPC start-exe]", err.message);
-      return false;
+      log(`[IPC start-exe] ${err.message}`);
+      return { success: false, error: err.message };
     }
   });
 
@@ -236,6 +281,16 @@ function registerIpcHandlers() {
   ipcMain.handle("write-text-file", async (_event, filePath, content) => {
     fs.writeFileSync(filePath, content, "utf-8");
     return true;
+  });
+
+  ipcMain.handle("save-file", async (_event, filePath, base64Data) => {
+    const buffer = Buffer.from(base64Data, "base64");
+    fs.writeFileSync(filePath, buffer);
+    return true;
+  });
+
+  ipcMain.handle("get-download-dir", async () => {
+    return getDownloadsDir();
   });
 }
 

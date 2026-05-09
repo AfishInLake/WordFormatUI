@@ -15,6 +15,7 @@
  *   latest              → PyPI 最新版
  *
  * 流程：
+ *   0. 检查已有运行时是否版本一致 → 是则跳过
  *   1. 创建 venv（--copies 模式，复制而非符号链接）
  *   2. pip install wordformat[api]@指定版本
  *   3. 输出到 electron/python-runtime/
@@ -28,16 +29,19 @@ const os = require("os");
 // ===== 参数解析 =====
 const args = process.argv.slice(2);
 let versionSpec = null;
+let forceRebuild = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--ver" || args[i] === "--version") {
     versionSpec = args[i + 1];
     i++;
+  } else if (args[i] === "--force" || args[i] === "-f") {
+    forceRebuild = true;
   }
 }
 
 // 从 .backend-version 读取默认版本
-if (!versionSpec) {
+if (!versionSpec && !forceRebuild) {
   const versionFile = path.join(__dirname, "..", ".backend-version");
   if (fs.existsSync(versionFile)) {
     versionSpec = fs.readFileSync(versionFile, "utf-8").trim();
@@ -49,56 +53,62 @@ if (!versionSpec) {
 }
 
 // ===== 解析版本 → pip install 参数 =====
-// 重要：[api] 可选依赖必须正确传递
 function resolveInstallTarget(spec) {
-  // GitHub 源码: github:v1.1.3 或 github:user/repo@v1.1.3
+  // GitHub 源码
   if (spec.startsWith("github:")) {
     const ref = spec.slice("github:".length);
-
-    // 如果包含 / 就当作完整仓库路径
     if (ref.includes("/")) {
       return {
+        source: "github",
         label: `GitHub 源码 ${ref}`,
-        // GitHub 安装需要 #egg=wordformat[api] 来指定可选依赖
         pkg: `"git+https://github.com/${ref}#egg=wordformat[api]"`,
+        // 只用 tag/ref 部分作为比较标识
+        compareKey: `github:${ref}`,
       };
     }
-
-    // 否则使用默认仓库 AfishInLake/WordFormat
     const tag = ref.startsWith("v") ? ref : `v${ref}`;
     return {
+      source: "github",
       label: `GitHub 源码 AfishInLake/WordFormat@${tag}`,
       pkg: `"git+https://github.com/AfishInLake/WordFormat.git@${tag}#egg=wordformat[api]"`,
+      compareKey: `github:AfishInLake/WordFormat@${tag}`,
     };
   }
 
-  // PyPI 显式版本: pypi:1.1.3
+  // PyPI 显式版本
   if (spec.startsWith("pypi:")) {
     const ver = spec.slice("pypi:".length);
     return {
+      source: "pypi",
       label: `PyPI wordformat[api]==${ver}`,
       pkg: `"wordformat[api]==${ver}"`,
+      compareKey: `pypi:${ver}`,
     };
   }
 
-  // latest
+  // latest — 永远不跳过
   if (spec === "latest") {
     return {
+      source: "pypi",
       label: "PyPI 最新版",
       pkg: `"wordformat[api]"`,
+      compareKey: null, // latest 永不匹配
     };
   }
 
   // 默认 PyPI 版本
   const ver = spec.startsWith("v") ? spec.slice(1) : spec;
   return {
+    source: "pypi",
     label: `PyPI wordformat[api]==${ver}`,
     pkg: `"wordformat[api]==${ver}"`,
+    compareKey: `pypi:${ver}`,
   };
 }
 
 // ===== 常量 =====
 const RUNTIME_DIR = path.join(__dirname, "..", "electron", "python-runtime");
+const VERSION_FILE = path.join(RUNTIME_DIR, "VERSION");
 const platform = os.platform();
 const isWindows = platform === "win32";
 
@@ -106,16 +116,58 @@ const pythonBin = isWindows
   ? path.join("Scripts", "python.exe")
   : path.join("bin", "python3");
 
-const { label: versionLabel, pkg: installTarget } = resolveInstallTarget(versionSpec);
+const { source, label: versionLabel, pkg: installTarget, compareKey } = resolveInstallTarget(versionSpec);
 
 console.log("=========================================");
 console.log("  构建可移植 Python 运行时");
 console.log("=========================================");
 console.log(`  平台:    ${platform}`);
 console.log(`  版本:    ${versionLabel}`);
-console.log(`  pip:     ${installTarget}`);
 console.log(`  输出:    ${RUNTIME_DIR}`);
 console.log("");
+
+// ===== 步骤 0: 版本检查，跳过重复构建 =====
+function getInstalledVersion() {
+  if (!fs.existsSync(VERSION_FILE)) return null;
+  try {
+    const content = fs.readFileSync(VERSION_FILE, "utf-8");
+    // VERSION 文件格式: "wordformat X.Y.Z\n来源: ...\n构建时间: ..."
+    const verMatch = content.match(/^wordformat (.+)$/m);
+    const keyMatch = content.match(/^compareKey: (.+)$/m);
+    return {
+      version: verMatch ? verMatch[1] : null,
+      compareKey: keyMatch ? keyMatch[1] : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function pythonExists() {
+  const exePath = path.join(RUNTIME_DIR, pythonBin);
+  return fs.existsSync(exePath);
+}
+
+const installed = getInstalledVersion();
+
+if (!forceRebuild && pythonExists() && installed) {
+  if (compareKey && installed.compareKey === compareKey) {
+    console.log(`✅ 已安装 ${installed.version}（${compareKey}），版本一致，跳过构建。`);
+    console.log(`   ${RUNTIME_DIR}`);
+    console.log("");
+    console.log("💡 如需强制重新构建: node scripts/build-backend.cjs --force");
+    process.exit(0);
+  }
+
+  if (compareKey === null) {
+    // latest — 永远重建
+    console.log(`⚠️  目标版本为 "latest"，将重新构建（当前: ${installed.version}）。`);
+  } else {
+    console.log(`⚠️  版本不一致: 目标 ${compareKey} ≠ 当前 ${installed.compareKey}，重新构建。`);
+  }
+} else if (pythonExists()) {
+  console.log("⚠️  运行时存在但无版本信息，重新构建。");
+}
 
 // ===== 步骤 1: 查找系统 Python =====
 function findSystemPython() {
@@ -128,14 +180,13 @@ function findSystemPython() {
         const major = parseInt(verMatch[1]);
         const minor = parseInt(verMatch[2]);
         console.log(`[1/5] 系统 Python: ${out}`);
-        
-        // 版本检查：wordformat 支持 3.10-3.13
+
         if (major === 3 && minor >= 14) {
           console.warn(`\n⚠️  警告: Python 3.${minor} 可能不被 wordformat 完全支持`);
           console.warn(`   wordformat 官方支持: Python 3.10 - 3.13`);
           console.warn(`   建议使用 Python 3.11 或 3.12\n`);
         }
-        
+
         return cmd;
       }
     } catch {
@@ -163,11 +214,10 @@ if (venvResult.status !== 0) {
 }
 
 const pythonPath = path.join(RUNTIME_DIR, pythonBin);
-const pipPath = path.join(RUNTIME_DIR, isWindows ? "Scripts" : "bin", isWindows ? "pip.exe" : "pip");
 
 // ===== 步骤 4: 升级 pip =====
 console.log("[4/5] 升级 pip...");
-const upgradeResult = spawnSync(pythonPath, ["-m", "pip", "install", "--upgrade", "pip"], {
+spawnSync(pythonPath, ["-m", "pip", "install", "--upgrade", "pip"], {
   stdio: "inherit",
   env: { ...process.env, PIP_NO_CACHE_DIR: "1" },
 });
@@ -175,13 +225,8 @@ const upgradeResult = spawnSync(pythonPath, ["-m", "pip", "install", "--upgrade"
 // ===== 步骤 5: pip install =====
 console.log(`[5/5] pip install ${installTarget} ...`);
 
-// 使用 shell 模式确保 [api] 正确传递
-const installCmd = `"${pythonPath}" -m pip install ${installTarget}`;
-console.log(`  执行: ${installCmd}`);
-
 const installResult = spawnSync(pythonPath, [
   "-m", "pip", "install",
-  // 不加引号，直接传递数组元素
   installTarget.replace(/"/g, ""),
 ], {
   stdio: "inherit",
@@ -189,7 +234,6 @@ const installResult = spawnSync(pythonPath, [
     ...process.env,
     PIP_NO_CACHE_DIR: "1",
   },
-  shell: false,
 });
 
 if (installResult.status !== 0) {
@@ -198,7 +242,6 @@ if (installResult.status !== 0) {
 }
 
 // ===== 验证 =====
-// wordformat 没有 __version__ 属性，用 pip show 获取版本
 const verResult = spawnSync(pythonPath, ["-m", "pip", "show", "wordformat"], { stdio: "pipe" });
 const verOutput = verResult.stdout.toString();
 const verMatch = verOutput.match(/^Version:\s*(.+)$/m);
@@ -212,7 +255,7 @@ if (verResult.status !== 0 || !verMatch) {
   process.exit(1);
 }
 
-// ===== 自检：确保 fastapi 已安装 =====
+// ===== 自检 =====
 console.log("\n自检依赖...");
 const deps = ["fastapi", "uvicorn", "python-multipart"];
 for (const dep of deps) {
@@ -229,10 +272,8 @@ for (const dep of deps) {
   }
 }
 
-// ===== 自检：确保能正常 import =====
 const importResult = spawnSync(pythonPath, [
-  "-c",
-  "from wordformat.api import app; print('wordformat.api OK')",
+  "-c", "from wordformat.api import app; print('wordformat.api OK')",
 ], { stdio: "pipe" });
 
 if (importResult.status !== 0) {
@@ -242,23 +283,43 @@ if (importResult.status !== 0) {
 }
 console.log("  ✓ wordformat.api");
 
-// ===== 写入版本信息 =====
+// ===== 写入版本信息（含 compareKey 用于下次跳过检查） =====
 fs.writeFileSync(
-  path.join(RUNTIME_DIR, "VERSION"),
-  `${installedVer}\n来源: ${versionLabel}\n构建时间: ${new Date().toISOString()}\n`
+  VERSION_FILE,
+  `${installedVer}\n来源: ${versionLabel}\ncompareKey: ${compareKey}\n构建时间: ${new Date().toISOString()}\n`
 );
 
-// ===== 清理缓存减小体积 =====
-console.log("\n清理 __pycache__...");
-try {
-  const cleanupDirs = findPyCacheDirs(RUNTIME_DIR);
-  for (const d of cleanupDirs) {
-    fs.rmSync(d, { recursive: true, force: true });
-  }
-  console.log(`  清理了 ${cleanupDirs.length} 个 __pycache__ 目录`);
-} catch {
-  // 忽略
+// ===== 清理无用文件 =====
+console.log("\n清理无用文件...");
+let cleanedCount = 0;
+
+for (const d of findPyCacheDirs(RUNTIME_DIR)) {
+  fs.rmSync(d, { recursive: true, force: true });
+  cleanedCount++;
 }
+console.log(`  清理了 ${cleanedCount} 个 __pycache__ 目录`);
+
+const distInfoDirs = findDirs(RUNTIME_DIR, (name) => name.endsWith(".dist-info"));
+for (const d of distInfoDirs) {
+  fs.rmSync(d, { recursive: true, force: true });
+  cleanedCount++;
+}
+console.log(`  清理了 ${distInfoDirs.length} 个 .dist-info 目录`);
+
+const testDirs = findDirs(RUNTIME_DIR, (name) => name === "tests" || name === "test" || name === "testing");
+for (const d of testDirs) {
+  fs.rmSync(d, { recursive: true, force: true });
+  cleanedCount++;
+}
+console.log(`  清理了 ${testDirs.length} 个 test 目录`);
+
+const pycFiles = findFiles(RUNTIME_DIR, (name) => name.endsWith(".pyc") || name.endsWith(".pyo"));
+for (const f of pycFiles) {
+  fs.rmSync(f, { force: true });
+  cleanedCount++;
+}
+console.log(`  清理了 ${pycFiles.length} 个 .pyc/.pyo 文件`);
+console.log(`  共清理 ${cleanedCount} 项`);
 
 // ===== 计算体积 =====
 const sizeMB = getDirSize(RUNTIME_DIR);
@@ -267,9 +328,9 @@ console.log(`   版本:   ${installedVer}`);
 console.log(`   来源:   ${versionLabel}`);
 console.log(`   路径:   ${RUNTIME_DIR}`);
 console.log("");
-console.log("💡 npm run electron:dev    开发模式 (需系统 pip install wordformat[api])");
+console.log("💡 npm run electron:dev    开发模式");
 console.log("💡 npm run electron:build  打包分发版");
-console.log("💡 node scripts/build-backend.cjs --ver github:v1.1.3  指定版本构建");
+console.log("💡 node scripts/build-backend.cjs --force  强制重新构建");
 
 // ===== 辅助函数 =====
 
@@ -283,9 +344,38 @@ function findPyCacheDirs(dir) {
         results.push(...findPyCacheDirs(path.join(dir, entry.name)));
       }
     }
-  } catch {
-    // 忽略
-  }
+  } catch {}
+  return results;
+}
+
+function findDirs(dir, matchFn) {
+  const results = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (matchFn(entry.name)) {
+          results.push(path.join(dir, entry.name));
+        } else if (!entry.name.startsWith(".")) {
+          results.push(...findDirs(path.join(dir, entry.name), matchFn));
+        }
+      }
+    }
+  } catch {}
+  return results;
+}
+
+function findFiles(dir, matchFn) {
+  const results = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fp = path.join(dir, entry.name);
+      if (entry.isDirectory() && !entry.name.startsWith(".")) {
+        results.push(...findFiles(fp, matchFn));
+      } else if (entry.isFile() && matchFn(entry.name)) {
+        results.push(fp);
+      }
+    }
+  } catch {}
   return results;
 }
 

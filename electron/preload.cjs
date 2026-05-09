@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'confirm-dialog',
       'read-text-file',
       'write-text-file',
+      'save-file',
+      'get-download-dir',
     ];
 
     if (allowedChannels.includes(channel)) {

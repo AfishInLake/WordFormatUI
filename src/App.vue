@@ -1,5 +1,7 @@
 <template>
   <div class="app-container">
+    <!-- 全局提示框 -->
+    <GlobalToast ref="toastRef" />
 
     <!-- 👇【新增部分】加载/错误 遮罩层 -->
     <!-- 当 isLoading 为 true 时显示，覆盖整个屏幕 -->
@@ -66,6 +68,7 @@
 
 <script setup>
 import {ref, onMounted} from 'vue';
+import GlobalToast from "./components/GlobalToast.vue";
 import DocTagChecker from "./components/DocTagChecker.vue";
 import ConfigGenerator from "./config-generator/ConfigGenerator.vue";
 import { save, open } from '@electron/dialog';
@@ -78,6 +81,9 @@ import {defaultConfig} from "./config-generator/utils";
 import {useExeManager} from './utils/useExeManager.js';
 
 const {ensureStarted} = useExeManager();
+
+// 全局 toast 引用
+const toastRef = ref(null);
 
 // 活动标签页
 const activeTab = ref('config');
@@ -108,23 +114,22 @@ const initApp = async () => {
   statusMessage.value = '正在清理旧进程...';
 
   try {
-    // 调用 Rust: 先 close 再 start
-    const success = await ensureStarted();
+    const result = await ensureStarted();
 
-    if (success) {
+    if (result.success) {
       statusMessage.value = '服务启动成功！即将进入...';
-      // 延迟一点点让用户体验到“成功”的感觉，然后隐藏遮罩
       setTimeout(() => {
         isLoading.value = false;
+        toastRef.value?.toast.success('后端服务已就绪');
       }, 800);
     } else {
-      throw new Error('后端返回启动失败，请检查 日志');
+      throw new Error(result.error || '后端返回启动失败，请检查日志');
     }
   } catch (err) {
     console.error(err);
     isError.value = true;
-    errorMessage.value = err.message || '无法启动后端服务，请检查日志';
-    isLoading.value = false; // 停止 loading，显示错误界面
+    errorMessage.value = err.message || '无法启动后端服务';
+    isLoading.value = false;
   }
 };
 
@@ -147,6 +152,11 @@ onMounted(() => {
 
   // 👇 启动 exe
   initApp();
+
+  // 注册全局 toast（供 main.js errorHandler 使用）
+  if (toastRef.value) {
+    window.__toast = toastRef.value.toast;
+  }
 });
 
 // 保存配置 (原有逻辑保持不变)
@@ -161,11 +171,11 @@ const saveConfig = async () => {
     if (filePath) {
       const yamlContent = yaml.dump(generatedConfig.value, {indent: 2, skipInvalid: true});
       await writeTextFile(filePath, yamlContent);
-      alert('配置保存成功！');
+      toastRef.value?.toast.success('配置保存成功！');
     }
   } catch (error) {
     console.error('保存配置失败:', error);
-    alert('保存配置失败：' + error.message);
+    toastRef.value?.toast.error('保存配置失败：' + error.message);
   }
 };
 
@@ -185,11 +195,11 @@ const loadConfig = async () => {
       if (configGeneratorRef.value) {
         configGeneratorRef.value.importConfig(config);
       }
-      alert('配置加载成功！');
+      toastRef.value?.toast.success('配置加载成功！');
     }
   } catch (error) {
     console.error('加载配置失败:', error);
-    alert('加载配置失败：' + error.message);
+    toastRef.value?.toast.error('加载配置失败：' + error.message);
   }
 };
 
