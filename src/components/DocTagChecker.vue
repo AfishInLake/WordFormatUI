@@ -49,12 +49,24 @@
           <button class="btn secondary-btn" @click="checkAllTags" :disabled="!isFileLoaded || isLoading">
             核对所有标签
           </button>
+          <button class="btn secondary-btn" @click="importJsonFile" :disabled="!isFileLoaded || isLoading">
+            导入JSON
+          </button>
           <button class="btn primary-btn" @click="exportModifiedJson" :disabled="!isFileLoaded">
-            导出修改后JSON
+            导出JSON
           </button>
         </div>
       </div>
     </div>
+
+    <!-- 隐藏的 file input 用于导入 JSON -->
+    <input
+      ref="jsonFileInput"
+      type="file"
+      accept=".json"
+      style="display: none"
+      @change="handleJsonImport"
+    />
 
     <!-- 主体内容区 -->
     <div class="main-content">
@@ -88,8 +100,6 @@ import FileUploadPanel from './FileUploadPanel.vue'
 import FormatActionPanel from './FormatActionPanel.vue'
 import NodeListPanel from './NodeListPanel.vue'
 import NodeDetailPanel from './NodeDetailPanel.vue'
-import { confirm as tauriConfirm } from '@electron/dialog';
-import { downloadFile } from '@electron/download';
 import {
   CATEGORY_CONFIG,
   SCORE_THRESHOLD,
@@ -127,6 +137,7 @@ const isLoading = ref(false)
 const loadingText = ref('')
 const selectedNodeIndex = ref(-1)
 const searchTerm = ref('')
+const jsonFileInput = ref(null)
 
 // ====== 计算属性 ======
 const currentNode = computed(() => {
@@ -270,10 +281,7 @@ const callCheckFormatApi = async () => {
 const callApplyFormatApi = async () => {
   if (!isFileLoaded.value) return
 
-  const ok = await tauriConfirm('⚠️ 此操作将根据当前标签生成新文档，是否继续？', {
-    title: '确认操作',
-    type: 'warning',
-  });
+  const ok = window.confirm('此操作将根据当前标签生成新文档，是否继续？');
   if (!ok) return;
 
   isLoading.value = true
@@ -321,22 +329,31 @@ const callApplyFormatApi = async () => {
   }
 }
 
-// 下载文件
+// 下载文件（浏览器原生方式）
 async function downloadFileFromResponse(response) {
   try {
     isLoading.value = false;
 
     if (!response?.data?.download_url) {
-      alert("✅ 操作完成！");
+      alert("操作完成！");
       return;
     }
 
     const { download_url, final_filename } = response.data;
-    await downloadFile(download_url, final_filename || "document.docx");
-    alert("✅ 文件下载成功！");
+    const downloadResp = await fetch(download_url);
+    if (!downloadResp.ok) throw new Error(`下载失败: ${downloadResp.status}`);
+    const blob = await downloadResp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = final_filename || 'document.docx';
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   } catch (err) {
     console.error("下载失败", err);
-    alert("✅ 处理完成！文件下载失败：" + err.message);
+    alert("处理完成！文件下载失败：" + err.message);
   }
 }
 // 核对所有标签（前端模拟：高亮低分+other）
@@ -373,6 +390,38 @@ const exportModifiedJson = () => {
   document.body.removeChild(a)
 }
 
+// 触发导入 JSON 的文件选择
+const importJsonFile = () => {
+  jsonFileInput.value?.click()
+}
+
+// 处理 JSON 文件导入
+const handleJsonImport = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    const json = JSON.parse(text)
+    if (!Array.isArray(json)) {
+      alert('JSON 格式错误：期望一个节点数组')
+      return
+    }
+    // 补全缺失的 id 字段
+    nodeData.value = json.map((node, idx) => ({
+      ...node,
+      id: node.id ?? idx
+    }))
+    isFileLoaded.value = true
+    selectedNodeIndex.value = -1
+    alert(`导入成功：${nodeData.value.length} 个节点`)
+  } catch (err) {
+    console.error('导入 JSON 失败:', err)
+    alert('导入失败：' + err.message)
+  } finally {
+    e.target.value = ''
+  }
+}
+
 // 清除选中当数据重置
 watch(isFileLoaded, (loaded) => {
   if (!loaded) selectedNodeIndex.value = -1
@@ -380,140 +429,24 @@ watch(isFileLoaded, (loaded) => {
 </script>
 
 <style scoped>
-.doc-tag-check-container {
-  width: 100%;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: #f9fafb;
-}
-
-.header-bar {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 0.75rem 1.5rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-  max-width: 1280px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.tool-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1e40af;
-  margin: 0;
-}
-
-.stats-info {
-  font-size: 0.875rem;
-  color: #64748b;
-}
-
-.stats-info span {
-  font-weight: 600;
-  color: #1e40af;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-input {
-  padding: 6px 28px 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  width: 180px;
-  outline: none;
-}
-
-.search-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.search-icon {
-  position: absolute;
-  right: 8px;
-  width: 16px;
-  height: 16px;
-  color: #9ca3af;
-  pointer-events: none;
-}
-
-.btn {
-  padding: 6px 12px;
-  font-size: 13px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.primary-btn {
-  background-color: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-.primary-btn:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-.secondary-btn {
-  background-color: #f3f4f6;
-  color: #374151;
-  border-color: #d1d5db;
-}
-
-.secondary-btn:hover:not(:disabled) {
-  background-color: #e5e7eb;
-}
-
-.main-content {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-@media (max-width: 992px) {
-  .main-content {
-    grid-template-columns: 1fr;
-  }
-}
+.doc-tag-check-container { width: 100%; min-height: 100vh; display: flex; flex-direction: column; background-color: #0f172a; }
+.header-bar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0.75rem 1.5rem; }
+.header-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; max-width: 1280px; margin: 0 auto; width: 100%; }
+.header-left { display: flex; flex-direction: column; gap: 0.25rem; }
+.tool-title { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; margin: 0; font-family: 'Crimson Pro', serif; }
+.stats-info { font-size: 0.8125rem; color: #64748b; }
+.stats-info span { font-weight: 600; color: #22c55e; }
+.header-right { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.search-box { position: relative; display: flex; align-items: center; }
+.search-input { padding: 6px 28px 6px 10px; font-size: 13px; border: 1px solid #475569; border-radius: 6px; width: 180px; outline: none; background: #0f172a; color: #e2e8f0; font-family: inherit; }
+.search-input:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,.15); }
+.search-icon { position: absolute; right: 8px; width: 16px; height: 16px; color: #64748b; pointer-events: none; }
+.btn { padding: 6px 12px; font-size: 12px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: all .2s; white-space: nowrap; font-family: inherit; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.primary-btn { background-color: #22c55e; color: #052e16; }
+.primary-btn:hover:not(:disabled) { background-color: #16a34a; }
+.secondary-btn { background-color: #334155; color: #cbd5e1; border: 1px solid #475569; }
+.secondary-btn:hover:not(:disabled) { background-color: #475569; border-color: #64748b; }
+.main-content { flex: 1; display: grid; grid-template-columns: 1fr 400px; gap: 1.5rem; padding: 1.5rem; width: 100%; max-width: 1280px; margin: 0 auto; }
+@media (max-width: 992px) { .main-content { grid-template-columns: 1fr; } }
 </style>

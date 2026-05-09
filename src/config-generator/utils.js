@@ -99,6 +99,24 @@ export const defaultConfig = {
   acknowledgements: {
     title: createConfigWithGlobalInheritance(),
     content: createConfigWithGlobalInheritance()
+  },
+  numbering: {
+    enabled: true,
+    level_1: {
+      enabled: true,
+      template: '%1',
+      suffix: 'space'
+    },
+    level_2: {
+      enabled: true,
+      template: '%1.%2',
+      suffix: 'space'
+    },
+    level_3: {
+      enabled: true,
+      template: '%1.%2.%3',
+      suffix: 'space'
+    }
   }
 }
 

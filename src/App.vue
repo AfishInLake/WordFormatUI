@@ -3,32 +3,8 @@
     <!-- 全局提示框 -->
     <GlobalToast ref="toastRef" />
 
-    <!-- 👇【新增部分】加载/错误 遮罩层 -->
-    <!-- 当 isLoading 为 true 时显示，覆盖整个屏幕 -->
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-content">
-        <div class="spinner"></div>
-        <h2>正在启动核心服务...</h2>
-        <p class="status-text">{{ statusMessage }}</p>
-      </div>
-    </div>
-
-    <!-- 当启动失败时显示 -->
-    <div v-else-if="isError" class="error-overlay">
-      <div class="error-content">
-        <h2 style="color: #ef4444;">⚠️ 服务启动失败</h2>
-        <p>{{ errorMessage }}</p>
-        <div class="error-actions">
-          <button class="btn primary-btn" @click="retryInit">🔄 重试启动</button>
-          <button class="btn secondary-btn" @click="ignoreError">⚠️ 忽略并继续 (可能无法使用)</button>
-        </div>
-      </div>
-    </div>
-    <!-- 👆【新增部分结束】 -->
-
-    <!-- 原有内容：只有当 !isLoading 且 !isError (或者用户选择忽略) 时才完全交互 -->
-    <!-- 注意：即使 isError，如果用户选择忽略，我们也显示主界面，但你可能需要在子组件里禁用功能 -->
-    <div class="nav-bar" :style="{ opacity: isLoading ? 0 : 1, pointerEvents: isLoading ? 'none' : 'auto' }">
+    <!-- 导航栏 -->
+    <div class="nav-bar">
       <div class="nav-content">
         <h1 class="app-title">WordFormat 工具</h1>
         <div class="nav-actions">
@@ -50,19 +26,34 @@
             <button class="nav-tab" :class="{ active: activeTab === 'checker' }" @click="activeTab = 'checker'">
               文档标签核对
             </button>
+            <button class="nav-tab" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'">
+              设置
+            </button>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 内容区域 -->
-    <div class="content-area" :style="{ opacity: isLoading ? 0 : 1, pointerEvents: isLoading ? 'none' : 'auto' }">
+    <div class="content-area">
       <!-- 配置生成器 -->
       <ConfigGenerator ref="configGeneratorRef" v-show="activeTab === 'config'" @config-updated="handleConfigUpdated"/>
 
       <!-- 文档标签核对工具 -->
       <DocTagChecker v-show="activeTab === 'checker'" :generated-config="generatedConfig"/>
+
+      <!-- 设置页面 -->
+      <SettingsPage v-show="activeTab === 'settings'" />
     </div>
+
+    <!-- 隐藏的 file input 用于加载配置 -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept=".yaml,.yml"
+      style="display: none"
+      @change="onConfigFileSelected"
+    />
   </div>
 </template>
 
@@ -71,16 +62,10 @@ import {ref, onMounted} from 'vue';
 import GlobalToast from "./components/GlobalToast.vue";
 import DocTagChecker from "./components/DocTagChecker.vue";
 import ConfigGenerator from "./config-generator/ConfigGenerator.vue";
-import { save, open } from '@electron/dialog';
-import { writeTextFile, readTextFile } from '@electron/fs';
+import SettingsPage from "./components/SettingsPage.vue";
 import yaml from 'js-yaml';
 import {defaultConfig} from "./config-generator/utils";
-
-// 👇【修改点 1】引入 exe 管理工具
-// 确保你的项目里有 src/utils/useExeManager.js 这个文件
-import {useExeManager} from './utils/useExeManager.js';
-
-const {ensureStarted} = useExeManager();
+import { loadSettings } from './utils/settings';
 
 // 全局 toast 引用
 const toastRef = ref(null);
@@ -94,64 +79,21 @@ const generatedConfig = ref(JSON.parse(JSON.stringify(defaultConfig)));
 // 配置生成器引用
 const configGeneratorRef = ref(null);
 
-// 👇【修改点 2】新增状态变量
-const isLoading = ref(true);       // 是否正在加载
-const isError = ref(false);        // 是否发生错误
-const statusMessage = ref('初始化中...'); // 加载提示文字
-const errorMessage = ref('');      // 错误提示文字
-const isIgnored = ref(false);      // 用户是否选择忽略错误
+// 隐藏的 file input 引用（用于加载配置）
+const fileInputRef = ref(null);
 
 // 处理配置更新
 const handleConfigUpdated = (config) => {
   generatedConfig.value = config;
 };
 
-// 👇【修改点 3】核心启动逻辑
-const initApp = async () => {
-  isLoading.value = true;
-  isError.value = false;
-  isIgnored.value = false;
-  statusMessage.value = '正在清理旧进程...';
-
-  try {
-    const result = await ensureStarted();
-
-    if (result.success) {
-      statusMessage.value = '服务启动成功！即将进入...';
-      setTimeout(() => {
-        isLoading.value = false;
-        toastRef.value?.toast.success('后端服务已就绪');
-      }, 800);
-    } else {
-      throw new Error(result.error || '后端返回启动失败，请检查日志');
-    }
-  } catch (err) {
-    console.error(err);
-    isError.value = true;
-    errorMessage.value = err.message || '无法启动后端服务';
-    isLoading.value = false;
-  }
-};
-
-// 重试按钮
-const retryInit = () => {
-  initApp();
-};
-
-// 忽略错误按钮 (让用户强行进入界面，虽然功能可能不可用)
-const ignoreError = () => {
-  isError.value = false;
-  isIgnored.value = true;
-  // 这里可以加一个提示：部分功能可能无法使用
-};
-
 // 生命周期：组件挂载后自动执行
 onMounted(() => {
+  // 从 localStorage 恢复用户的后端连接配置
+  loadSettings();
+
   // 初始化默认配置
   generatedConfig.value = JSON.parse(JSON.stringify(defaultConfig));
-
-  // 👇 启动 exe
-  initApp();
 
   // 注册全局 toast（供 main.js errorHandler 使用）
   if (toastRef.value) {
@@ -159,47 +101,50 @@ onMounted(() => {
   }
 });
 
-// 保存配置 (原有逻辑保持不变)
-const saveConfig = async () => {
+// 保存配置 → 浏览器下载
+const saveConfig = () => {
   if (!generatedConfig.value) return;
   try {
-    const filePath = await save({
-      title: '保存配置',
-      defaultPath: 'wordformat-config.yaml',
-      filters: [{name: 'YAML 配置文件', extensions: ['yaml', 'yml']}]
-    });
-    if (filePath) {
-      const yamlContent = yaml.dump(generatedConfig.value, {indent: 2, skipInvalid: true});
-      await writeTextFile(filePath, yamlContent);
-      toastRef.value?.toast.success('配置保存成功！');
-    }
+    const yamlContent = yaml.dump(generatedConfig.value, { indent: 2, skipInvalid: true });
+    const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'wordformat-config.yaml';
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    toastRef.value?.toast.success('配置已下载！');
   } catch (error) {
     console.error('保存配置失败:', error);
     toastRef.value?.toast.error('保存配置失败：' + error.message);
   }
 };
 
-// 加载配置 (原有逻辑保持不变)
-const loadConfig = async () => {
+// 加载配置 → 触发隐藏 file input
+const loadConfig = () => {
+  fileInputRef.value?.click();
+};
+
+// file input 选择文件后的回调
+const onConfigFileSelected = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
   try {
-    const selected = await open({
-      title: '加载配置',
-      multiple: false,
-      filters: [{name: 'YAML 配置文件', extensions: ['yaml', 'yml']}]
-    });
-    if (selected) {
-      const filePath = Array.isArray(selected) ? selected[0] : selected;
-      const yamlContent = await readTextFile(filePath);
-      const config = yaml.load(yamlContent);
-      generatedConfig.value = config;
-      if (configGeneratorRef.value) {
-        configGeneratorRef.value.importConfig(config);
-      }
-      toastRef.value?.toast.success('配置加载成功！');
+    const yamlContent = await file.text();
+    const config = yaml.load(yamlContent);
+    generatedConfig.value = config;
+    if (configGeneratorRef.value) {
+      configGeneratorRef.value.importConfig(config);
     }
+    toastRef.value?.toast.success('配置加载成功！');
   } catch (error) {
     console.error('加载配置失败:', error);
     toastRef.value?.toast.error('加载配置失败：' + error.message);
+  } finally {
+    // 重置 input 以便重复选择同一文件
+    e.target.value = '';
   }
 };
 
@@ -212,8 +157,10 @@ const loadConfig = async () => {
 }
 
 body {
-  background-color: #f9fafb;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app-container {
@@ -223,11 +170,15 @@ body {
   flex-direction: column;
 }
 
+/* ── 导航栏 ── */
 .nav-bar {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
   padding: 0 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
 }
 
 .nav-content {
@@ -241,16 +192,18 @@ body {
 }
 
 .app-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1e40af;
+  font-family: 'Crimson Pro', serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #f1f5f9;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .config-actions {
@@ -260,79 +213,89 @@ body {
 
 .nav-tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 3px;
 }
 
+/* ── 通用按钮 ── */
 .btn {
   padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-family: inherit;
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .primary-btn {
-  background-color: #3b82f6;
-  color: white;
+  background-color: #22c55e;
+  color: #052e16;
 }
 
 .primary-btn:hover:not(:disabled) {
-  background-color: #2563eb;
+  background-color: #16a34a;
 }
 
 .secondary-btn {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background-color: #334155;
+  color: #cbd5e1;
+  border: 1px solid #475569;
 }
 
 .secondary-btn:hover:not(:disabled) {
-  background-color: #e5e7eb;
+  background-color: #475569;
+  border-color: #64748b;
 }
 
+/* ── 标签页 ── */
 .nav-tab {
-  padding: 0.5rem 1.5rem;
-  font-size: 1rem;
+  padding: 0.45rem 1.25rem;
+  font-size: 0.875rem;
   font-weight: 500;
   border: none;
   border-radius: 6px;
   background-color: transparent;
-  color: #64748b;
+  color: #94a3b8;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-family: inherit;
 }
 
 .nav-tab:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: #1e293b;
+  color: #e2e8f0;
 }
 
 .nav-tab.active {
-  background-color: #3b82f6;
-  color: white;
+  background-color: #22c55e;
+  color: #052e16;
 }
 
+/* ── 内容区域 ── */
 .content-area {
   flex: 1;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
+/* ── 响应式 ── */
 @media (max-width: 768px) {
   .nav-content {
     flex-direction: column;
     height: auto;
     padding: 1rem 0;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .nav-tabs {

@@ -8,9 +8,8 @@
           class="toast-item"
           :class="`toast-${item.type}`"
         >
-          <span class="toast-icon">{{ iconMap[item.type] }}</span>
           <span class="toast-msg">{{ item.message }}</span>
-          <button class="toast-close" @click="remove(item.id)">×</button>
+          <button class="toast-close" @click="remove(item.id)">&times;</button>
         </div>
       </TransitionGroup>
     </div>
@@ -24,10 +23,10 @@ const toasts = ref([]);
 let nextId = 0;
 
 const iconMap = {
-  info: 'ℹ️',
-  success: '✅',
-  warn: '⚠️',
-  error: '❌',
+  info: '',
+  success: '',
+  warn: '',
+  error: '',
 };
 
 function add(type, message, duration = 4000) {
@@ -67,28 +66,28 @@ defineExpose({ toast });
 .toast-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  border-radius: 10px;
+  background: #1e293b;
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
   min-width: 280px;
   max-width: 480px;
   pointer-events: auto;
   font-size: 14px;
+  border: 1px solid #334155;
 }
-.toast-icon { font-size: 18px; flex-shrink: 0; }
-.toast-msg { flex: 1; color: #1f2937; }
+.toast-msg { flex: 1; color: #e2e8f0; }
 .toast-close {
-  background: none; border: none; font-size: 18px;
-  cursor: pointer; color: #9ca3af; padding: 0 4px;
+  background: none; border: none; font-size: 22px;
+  cursor: pointer; color: #64748b; padding: 0 4px; line-height: 1;
 }
-.toast-close:hover { color: #374151; }
+.toast-close:hover { color: #e2e8f0; }
 
-.toast-info  { border-left: 4px solid #3b82f6; }
+.toast-info    { border-left: 4px solid #3b82f6; }
 .toast-success { border-left: 4px solid #22c55e; }
-.toast-warn  { border-left: 4px solid #f59e0b; }
-.toast-error { border-left: 4px solid #ef4444; }
+.toast-warn    { border-left: 4px solid #f59e0b; }
+.toast-error   { border-left: 4px solid #ef4444; }
 
 .toast-enter-active { transition: all .3s ease; }
 .toast-leave-active { transition: all .2s ease; }

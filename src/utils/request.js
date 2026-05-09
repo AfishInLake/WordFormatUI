@@ -1,16 +1,18 @@
 import axios from 'axios';
+import { backendBaseUrl } from './settings';
 
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
   timeout: 120000, // 文档处理可能较慢，超时设为 2 分钟
   headers: {
     'Content-Type': 'application/json;charset=UTF-8',
   },
 });
 
-// 请求拦截器
+// 请求拦截器：动态注入 baseURL
 service.interceptors.request.use(
   (config) => {
+    config.baseURL = backendBaseUrl.value;
+
     // GET 请求添加时间戳防止缓存
     if (config.method === 'get') {
       config.params = {

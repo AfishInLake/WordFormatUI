@@ -47,6 +47,11 @@
         <ConfigSection title="致谢配置">
           <AcknowledgementsConfig :config="userConfig.acknowledgements" />
         </ConfigSection>
+
+        <!-- 标题自动编号 -->
+        <ConfigSection title="标题自动编号">
+          <NumberingConfig :config="userConfig.numbering" />
+        </ConfigSection>
       </div>
 
       <!-- 生成的YAML结果 -->
@@ -75,6 +80,7 @@ import FiguresConfig from './components/FiguresConfig.vue'
 import TablesConfig from './components/TablesConfig.vue'
 import ReferencesConfig from './components/ReferencesConfig.vue'
 import AcknowledgementsConfig from './components/AcknowledgementsConfig.vue'
+import NumberingConfig from './components/NumberingConfig.vue'
 import YamlOutput from './components/YamlOutput.vue'
 
 // 用户配置
@@ -138,46 +144,10 @@ defineExpose({
 </script>
 
 <style scoped>
-.config-generator {
-  width: 100%;
-}
-
-.app-content {
-  display: flex;
-  gap: 20px;
-  width: 100%;
-}
-
-.config-sections {
-  flex: 1;
-  min-width: 0;
-}
-
-.yaml-preview {
-  width: 400px;
-  min-width: 300px;
-  position: sticky;
-  top: 20px;
-  align-self: flex-start;
-  max-height: calc(100vh - 100px);
-  overflow-y: auto;
-}
-
-@media (max-width: 1200px) {
-  .app-content {
-    flex-direction: column;
-  }
-  
-  .yaml-preview {
-    width: 100%;
-    position: static;
-    max-height: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .app-content {
-    gap: 10px;
-  }
-}
+.config-generator { width: 100%; }
+.app-content { display: flex; gap: 20px; width: 100%; }
+.config-sections { flex: 1; min-width: 0; }
+.yaml-preview { width: 380px; min-width: 280px; position: sticky; top: 84px; align-self: flex-start; max-height: calc(100vh - 110px); overflow-y: auto; }
+@media (max-width: 1200px) { .app-content { flex-direction: column; } .yaml-preview { width: 100%; position: static; max-height: none; } }
+@media (max-width: 768px) { .app-content { gap: 10px; } }
 </style>

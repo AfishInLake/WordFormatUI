@@ -12,6 +12,7 @@ export const CATEGORY_CONFIG = {
     "heading_level_1": "段落必须以“第X章”或单个阿拉伯数字（如“1”“2”）开头，后接空格和标题文字；仅为名词短语",
     "heading_level_2": "段落必须以“X.Y”格式开头（如“1.1”），仅含一个“.”；后接标题文字无完整句子",
     "heading_level_3": "段落必须以“X.Y.Z”格式开头（如“1.1.1”），仅含两个“.”；后接标题文字无完整句子",
+    "heading_mulu": "目录标题：段落等于“目录”或“目 录”（含空格变体）",
     "heading_fulu": "段落等于“附录”",
     "references_title": "段落等于“参考文献”或“References”",
     "acknowledgements_title": "段落和“致谢”或“Acknowledgements”等词意思相近",
@@ -27,6 +28,7 @@ export const LEVEL_MAP = {
     "keywords_chinese": 2, "keywords_english": 2,
     "references_title": 1, "acknowledgements_title": 1,
     "heading_fulu": 1,
+    "heading_mulu": 1,
     "heading_level_1": 1, "heading_level_2": 2, "heading_level_3": 3,
     "abstract_chinese_title_content": 1, "abstract_english_title_content": 1,
     "caption_figure": 5, "caption_table": 5, "body_text": 5, "other": 5

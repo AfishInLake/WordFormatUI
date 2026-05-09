@@ -37,6 +37,10 @@
               <div class="property-label">节点内容</div>
               <div class="property-value content-value">{{ currentNode.paragraph }}</div>
             </div>
+            <div class="property-item" v-if="currentNode.replace">
+              <div class="property-label replace-label">替换内容</div>
+              <div class="property-value content-value replace-value">{{ currentNode.replace }}</div>
+            </div>
             <div class="property-item">
               <div class="property-label">置信度得分</div>
               <div class="property-value">{{ currentNode.score.toFixed(4) }}（判定阈值：{{ scoreThreshold }}）</div>
@@ -75,6 +79,7 @@
                   {{ key.replace(/_/g, ' ') }}
                 </option>
               </select>
+              <div class="category-desc">{{ categoryConfig[localCategory] || '' }}</div>
             </div>
             <div class="check-result" :class="resultClass">
               {{ resultText }}
@@ -146,106 +151,72 @@ const resultText = computed(() => {
 .node-detail-section { margin-left: auto; }
 .detail-card {
   position: sticky;
-  top: 70px;
-  max-height: calc(100vh - 110px);
+  top: 84px;
+  max-height: calc(100vh - 120px);
   min-height: auto;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 1rem;
 }
 .detail-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #e2e8f0;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #334155;
   margin-bottom: 1rem;
 }
 .no-select-tip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  color: #6b7280;
-  gap: 0.75rem;
-  padding: 6rem 0;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; flex: 1; color: #64748b; gap: 0.75rem; padding: 6rem 0;
 }
-.no-select-icon { width: 48px; height: 48px; color: #d1d5db; }
+.no-select-icon { width: 48px; height: 48px; color: #334155; }
 .property-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
+  border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-bottom: 8px;
 }
 .property-card-header {
-  padding: 6px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-  color: #1f2937;
+  padding: 6px 8px; font-size: 12px; font-weight: 500;
+  background-color: #0f172a; color: #94a3b8;
+  border-bottom: 1px solid #334155;
 }
 .property-card-body {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  padding: 8px; display: flex; flex-direction: column; gap: 0.75rem;
 }
 .property-item { display: flex; flex-direction: column; gap: 2px; }
-.property-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-}
-.label-tip { font-size: 11px; font-weight: 400; color: #9ca3af; }
+.property-label { font-size: 12px; font-weight: 500; color: #64748b; }
+.label-tip { font-size: 11px; font-weight: 400; color: #475569; }
 .property-value {
-  font-size: 13px;
-  color: #1f2937;
-  padding: 6px 8px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  background-color: #f8fafc;
-  line-height: 1.4;
-  word-break: break-all;
+  font-size: 13px; color: #e2e8f0;
+  padding: 6px 8px; border-radius: 6px;
+  border: 1px solid #334155; background-color: #0f172a;
+  line-height: 1.4; word-break: break-all;
 }
 .content-value { max-height: 8rem; overflow-y: auto; }
-.fingerprint-value {
-  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-}
+.replace-label { color: #4ade80; font-weight: 600; }
+.replace-value { border-color: #166534; background-color: #052e16; color: #6ee7b7; }
 .status-value { border: none; padding: 6px 8px; }
-.status-normal { background-color: #dcfce7; color: #166534; }
-.status-error { background-color: #fee2e2; color: #dc2626; }
-.status-other { background-color: #e5e7eb; color: #4b5563; }
+.status-normal { background-color: #052e16; color: #4ade80; }
+.status-error { background-color: #450a0a; color: #fca5a5; }
+.status-other { background-color: #1e293b; color: #94a3b8; }
 .category-select {
-  width: 100%;
-  font-size: 13px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  cursor: pointer;
-  margin: 4px 0;
-  min-width: 100%;
-  box-sizing: border-box;
+  width: 100%; font-size: 13px; padding: 6px 8px;
+  border-radius: 6px; border: 1px solid #475569;
+  background: #0f172a; color: #e2e8f0; cursor: pointer;
+  margin: 4px 0; box-sizing: border-box;
 }
-.category-select:focus {
-  outline: 1px solid #3b82f6;
-  border-color: #3b82f6;
-}
-.check-result {
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 13px;
-  text-align: center;
-  margin-top: 8px;
-}
-.result-normal { background-color: #dcfce7; color: #166534; }
-.result-error { background-color: #fee2e2; color: #dc2626; }
-.result-other { background-color: #e5e7eb; color: #4b5563; }
+.category-select:focus { outline: 1px solid #22c55e; border-color: #22c55e; }
+.category-desc { font-size: 11px; color: #64748b; line-height: 1.4; padding: 4px 0 0; }
+.check-result { padding: 6px 8px; border-radius: 6px; font-size: 13px; text-align: center; margin-top: 8px; }
+.result-normal { background-color: #052e16; color: #4ade80; }
+.result-error { background-color: #450a0a; color: #fca5a5; }
+.result-other { background-color: #1e293b; color: #94a3b8; }
 .flex { display: flex; }
 .items-center { align-items: center; }
 .mr-2 { margin-right: 0.5rem; }
 .mt-4 { margin-top: 1rem; }
+.fingerprint-value { font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace; font-size: 11px; }
 </style>

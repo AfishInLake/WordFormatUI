@@ -14,6 +14,7 @@ export { default as FiguresConfig } from './components/FiguresConfig.vue'
 export { default as TablesConfig } from './components/TablesConfig.vue'
 export { default as ReferencesConfig } from './components/ReferencesConfig.vue'
 export { default as AcknowledgementsConfig } from './components/AcknowledgementsConfig.vue'
+export { default as NumberingConfig } from './components/NumberingConfig.vue'
 export { default as YamlOutput } from './components/YamlOutput.vue'
 
 // 导入工具函数和默认配置

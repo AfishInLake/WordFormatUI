@@ -1,54 +1,41 @@
-name: Release Desktop App
+name: Release
 
 on:
   push:
-    tags: [ "v*" ]
+    tags: ['v*']
+
+# 同时需要 GitHub Pages 和 Release 的写权限
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   release:
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
-    strategy:
-      matrix:
-        os: [ windows-latest, macos-latest ]
-      fail-fast: false
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v6.2.0
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22.13.1
-          cache: npm
+          node-version: 22
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm run build
 
-      - name: Build Electron app
-        run: npm run electron:build
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 打包 dist 用于 Release 下载
+      - name: Package dist
+        run: zip -r wordformatui-dist.zip dist
 
-      # === 找到构建产物并上传到 Release ===
-      - name: Locate bundle file
-        id: find-bundle
-        shell: bash
-        run: |
-          cd release
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            BUNDLE=$(find . -type f \( -name "*.exe" -o -name "*.msi" \) | head -n1)
-          else  # macOS
-            BUNDLE=$(find . -type f \( -name "*.dmg" -o -name "*.zip" \) ! -name "*-mac.zip" | head -n1)
-          fi
-          echo "bundle_path=release/$BUNDLE" >> $GITHUB_OUTPUT
-          echo "Found: $BUNDLE"
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2.5.0
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.find-bundle.outputs.bundle_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: wordformatui-dist.zip
+          generate_release_notes: true
+
+      # 部署到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
